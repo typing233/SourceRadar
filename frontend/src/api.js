@@ -45,4 +45,22 @@ export const getDigest = () => api.get('/digest')
 
 export const generateDigest = () => api.post('/digest/generate')
 
+// LLM Configuration
+export const getLLMConfig = () => api.get('/llm/config')
+
+export const updateLLMConfig = (config) => api.put('/llm/config', config)
+
+export const testLLMConnection = () => api.post('/llm/test-connection')
+
+export const analyzeItem = (itemId) => api.post(`/llm/analyze-item/${itemId}`)
+
+export const analyzeAllItems = () => api.post('/llm/analyze-all')
+
+// Clustering & Topology
+export const getCategories = () => api.get('/cluster/categories')
+
+export const getClusters = (params) => api.get('/cluster/list', { params })
+
+export const getTopology = (params) => api.get('/cluster/topology', { params })
+
 export default api

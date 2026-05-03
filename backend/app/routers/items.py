@@ -48,7 +48,6 @@ def get_feed(
 
     result = []
     for item, ms in page_items:
-        raw_tags = item.get_raw_tags()
         result.append(
             schemas.ItemOut(
                 id=item.id,
@@ -56,10 +55,13 @@ def get_feed(
                 url=item.url,
                 description=item.description or "",
                 source=item.source,
-                raw_tags=raw_tags,
+                raw_tags=item.get_raw_tags(),
+                semantic_tags=item.get_semantic_tags(),
+                category=item.category,
                 score=item.score,
                 published_at=item.published_at,
                 created_at=item.created_at,
+                analyzed_at=item.analyzed_at,
                 match_score=ms,
             )
         )
