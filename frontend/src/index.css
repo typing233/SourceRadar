@@ -469,6 +469,37 @@ input:focus, select:focus {
   font-weight: 500;
 }
 
+.node-label-hover {
+  background: rgba(10, 10, 26, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.6);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 120px;
+  max-width: 200px;
+  text-align: center;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.node-label-hover-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-label-hover-meta {
+  font-size: 0.72rem;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
 .node-details-overlay {
   position: fixed;
   inset: 0;
