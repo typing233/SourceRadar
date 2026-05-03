@@ -29,10 +29,12 @@ const SOURCE_ICONS = {
   ph: '🚀',
 }
 
-function NodeSphere({ node, isSelected, onClick, isHovered, onHover }) {
+function NodeSphere({ node, isSelected, onClick, onHover, onDragStart, onDragEnd, isDragging, dragPlane }) {
   const meshRef = useRef()
+  const groupRef = useRef()
   const [hovered, setHovered] = useState(false)
   const color = CATEGORY_COLORS[node.category] || 0x666666
+  const { camera, gl, raycaster } = useThree()
   
   const scale = useMemo(() => {
     const base = 1 + node.size * 0.3
@@ -62,14 +64,22 @@ function NodeSphere({ node, isSelected, onClick, isHovered, onHover }) {
     onClick && onClick(node)
   }
 
+  const handlePointerDown = (e) => {
+    if (!onDragStart) return
+    e.stopPropagation()
+    e.stopPropagation()
+    onDragStart(node.id, e)
+  }
+
   return (
-    <group position={[node.x, node.y, node.z]}>
+    <group ref={groupRef} position={[node.x, node.y, node.z]}>
       <mesh
         ref={meshRef}
         scale={[scale, scale, scale]}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         onClick={handleClick}
+        onPointerDown={handlePointerDown}
       >
         <sphereGeometry args={[1, 32, 32]} />
         <meshStandardMaterial
@@ -124,8 +134,23 @@ function LinkLine({ source, target, strength }) {
   )
 }
 
-function NodeLabel({ node, isVisible }) {
+function NodeLabel({ node, isVisible, isHoverLabel }) {
   if (!isVisible) return null
+  
+  if (isHoverLabel) {
+    return (
+      <group position={[node.x, node.y + 1.8, node.z]}>
+        <Html center distanceFactor={100}>
+          <div className="node-label-hover">
+            <div className="node-label-hover-title">{node.title}</div>
+            <div className="node-label-hover-meta">
+              {SOURCE_ICONS[node.source] || '📦'} {Math.round(node.match_score * 100)}% match
+            </div>
+          </div>
+        </Html>
+      </group>
+    )
+  }
   
   return (
     <group position={[node.x, node.y + 1.5, node.z]}>
@@ -140,10 +165,29 @@ function NodeLabel({ node, isVisible }) {
   )
 }
 
-function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
+function PhysicsSimulation({ nodes, links, onNodesUpdate, draggingNodeId }) {
   const nodesRef = useRef([...nodes])
   const velocitiesRef = useRef(nodes.map(() => ({ x: 0, y: 0, z: 0 })))
   const lastUpdateRef = useRef(0)
+
+  useEffect(() => {
+    const nodeMap = {}
+    nodesRef.current.forEach(n => { nodeMap[n.id] = n })
+    
+    nodes.forEach(newNode => {
+      const existingNode = nodeMap[newNode.id]
+      if (existingNode) {
+        if (existingNode.id !== draggingNodeId) {
+          existingNode.x = newNode.x
+          existingNode.y = newNode.y
+          existingNode.z = newNode.z
+        }
+      } else {
+        nodesRef.current.push({ ...newNode })
+        velocitiesRef.current.push({ x: 0, y: 0, z: 0 })
+      }
+    })
+  }, [nodes, draggingNodeId])
 
   useFrame((state, delta) => {
     const now = Date.now()
@@ -160,9 +204,12 @@ function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
     const forces = currentNodes.map(() => ({ x: 0, y: 0, z: 0 }))
 
     for (let i = 0; i < currentNodes.length; i++) {
+      const n1 = currentNodes[i]
+      if (n1.id === draggingNodeId) continue
+      
       for (let j = i + 1; j < currentNodes.length; j++) {
-        const n1 = currentNodes[i]
         const n2 = currentNodes[j]
+        if (n2.id === draggingNodeId) continue
         
         const dx = n2.x - n1.x
         const dy = n2.y - n1.y
@@ -192,6 +239,7 @@ function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
       const targetNode = currentNodes.find(n => n.id === link.target)
       
       if (!sourceNode || !targetNode) continue
+      if (sourceNode.id === draggingNodeId || targetNode.id === draggingNodeId) continue
       
       const sourceIdx = currentNodes.indexOf(sourceNode)
       const targetIdx = currentNodes.indexOf(targetNode)
@@ -221,6 +269,8 @@ function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
     let hasChanges = false
     for (let i = 0; i < currentNodes.length; i++) {
       const node = currentNodes[i]
+      if (node.id === draggingNodeId) continue
+      
       const vel = velocities[i]
       const force = forces[i]
       
@@ -248,7 +298,7 @@ function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
       }
     }
 
-    if (hasChanges) {
+    if (hasChanges || draggingNodeId) {
       onNodesUpdate && onNodesUpdate([...currentNodes])
     }
   })
@@ -256,22 +306,102 @@ function PhysicsSimulation({ nodes, links, onNodesUpdate }) {
   return null
 }
 
-function Scene({ nodes, links, selectedNode, onSelectNode, hoveredNode, onHoverNode }) {
+function Scene({ nodes, links, selectedNode, onSelectNode, hoveredNode, onHoverNode, onNodePositionUpdate }) {
   const [displayNodes, setDisplayNodes] = useState(nodes)
+  const [draggingNodeId, setDraggingNodeId] = useState(null)
+  const controlsRef = useRef(null)
+  const dragPlaneRef = useRef(null)
+  const { camera, raycaster, gl } = useThree()
+  const initialMouse = useRef({ x: 0, y: 0 })
+  const initialNodePos = useRef({ x: 0, y: 0, z: 0 })
 
   useEffect(() => {
-    setDisplayNodes(nodes)
-  }, [nodes])
+    if (!draggingNodeId) {
+      setDisplayNodes(nodes)
+    }
+  }, [nodes, draggingNodeId])
 
   const handleNodesUpdate = useCallback((updated) => {
     setDisplayNodes(updated)
-  }, [])
+    onNodePositionUpdate && onNodePositionUpdate(updated)
+  }, [onNodePositionUpdate])
 
   const nodeMap = useMemo(() => {
     const map = {}
     displayNodes.forEach(n => { map[n.id] = n })
     return map
   }, [displayNodes])
+
+  const handleDragStart = useCallback((nodeId, event) => {
+    event.stopPropagation()
+    setDraggingNodeId(nodeId)
+    if (controlsRef.current) {
+      controlsRef.current.enabled = false
+    }
+    
+    const node = nodeMap[nodeId]
+    if (node) {
+      initialNodePos.current = { x: node.x, y: node.y, z: node.z }
+      initialMouse.current = { x: event.clientX, y: event.clientY }
+    }
+  }, [nodeMap])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingNodeId(null)
+    if (controlsRef.current) {
+      controlsRef.current.enabled = true
+    }
+  }, [])
+
+  const handlePointerMove = useCallback((event) => {
+    if (draggingNodeId === null) return
+    
+    const node = nodeMap[draggingNodeId]
+    if (!node) return
+
+    const mouse = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1
+    )
+
+    raycaster.setFromCamera(mouse, camera)
+    
+    const distance = Math.sqrt(
+      Math.pow(node.x - camera.position.x, 2) +
+      Math.pow(node.y - camera.position.y, 2) +
+      Math.pow(node.z - camera.position.z, 2)
+    )
+    
+    const planeNormal = new THREE.Vector3()
+    planeNormal.subVectors(camera.position, new THREE.Vector3(node.x, node.y, node.z)).normalize()
+    const plane = new THREE.Plane(planeNormal, -planeNormal.dot(new THREE.Vector3(node.x, node.y, node.z)))
+    
+    const intersectionPoint = new THREE.Vector3()
+    raycaster.ray.intersectPlane(plane, intersectionPoint)
+    
+    if (intersectionPoint) {
+      node.x = intersectionPoint.x
+      node.y = intersectionPoint.y
+      node.z = intersectionPoint.z
+      
+      setDisplayNodes([...displayNodes])
+    }
+  }, [draggingNodeId, nodeMap, camera, raycaster, displayNodes])
+
+  useEffect(() => {
+    if (draggingNodeId !== null) {
+      const handleMove = (e) => handlePointerMove(e)
+      const handleUp = (e) => handleDragEnd()
+      
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', handleUp)
+      
+      return () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', handleUp)
+      }
+    }
+  }, [draggingNodeId, handlePointerMove, handleDragEnd])
 
   return (
     <>
@@ -283,6 +413,7 @@ function Scene({ nodes, links, selectedNode, onSelectNode, hoveredNode, onHoverN
         nodes={displayNodes}
         links={links}
         onNodesUpdate={handleNodesUpdate}
+        draggingNodeId={draggingNodeId}
       />
 
       {links.map((link, idx) => {
@@ -298,18 +429,29 @@ function Scene({ nodes, links, selectedNode, onSelectNode, hoveredNode, onHoverN
           node={node}
           isSelected={selectedNode?.id === node.id}
           onClick={onSelectNode}
-          isHovered={hoveredNode?.id === node.id}
           onHover={onHoverNode}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          isDragging={draggingNodeId === node.id}
         />
       ))}
 
       {selectedNode && (
-        <NodeLabel node={selectedNode} isVisible={true} />
+        <NodeLabel node={selectedNode} isVisible={true} isHoverLabel={false} />
+      )}
+
+      {hoveredNode && !selectedNode && hoveredNode.id !== draggingNodeId && (
+        <NodeLabel node={hoveredNode} isVisible={true} isHoverLabel={true} />
+      )}
+
+      {draggingNodeId && nodeMap[draggingNodeId] && (
+        <NodeLabel node={nodeMap[draggingNodeId]} isVisible={true} isHoverLabel={true} />
       )}
 
       <Sparkles count={50} scale={200} size={4} speed={0.4} opacity={0.3} color="#6366f1" />
       
       <OrbitControls
+        ref={controlsRef}
         enableDamping
         dampingFactor={0.05}
         minDistance={20}
@@ -410,13 +552,16 @@ export default function Topology() {
     fetchTopology(source, limit)
   }, [source, limit, fetchTopology])
 
+  const handleNodePositionUpdate = useCallback((updatedNodes) => {
+  }, [])
+
   return (
     <main className="topology-page">
       <div className="topology-header">
         <div>
           <div className="section-title">3D Topology View</div>
           <div className="section-sub">
-            Explore projects as an interactive network. Click nodes to view details.
+            Drag nodes to adjust layout. Hover to preview. Click for details.
           </div>
         </div>
         
@@ -461,6 +606,7 @@ export default function Topology() {
                 onSelectNode={setSelectedNode}
                 hoveredNode={hoveredNode}
                 onHoverNode={setHoveredNode}
+                onNodePositionUpdate={handleNodePositionUpdate}
               />
             </Canvas>
             
