@@ -1,10 +1,10 @@
 import json
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey,
-    Integer, String, Text, Date, UniqueConstraint
+    Integer, String, Text, Date, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import relationship
 
@@ -20,6 +20,10 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     receive_digest = Column(Boolean, default=True)
+    llm_base_url = Column(String(500), nullable=True)
+    llm_api_key = Column(String(500), nullable=True)
+    llm_model_name = Column(String(100), nullable=True)
+    llm_embedding_model = Column(String(100), nullable=True)
 
     user_tags = relationship("UserTag", back_populates="user", cascade="all, delete-orphan")
     digests = relationship("Digest", back_populates="user", cascade="all, delete-orphan")
@@ -30,6 +34,8 @@ class Tag(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
+    category = Column(String(100), nullable=True)
+    embedding = Column(JSON, nullable=True)
 
     user_tags = relationship("UserTag", back_populates="tag", cascade="all, delete-orphan")
 
@@ -53,17 +59,35 @@ class Item(Base):
     description = Column(Text, default="")
     source = Column(String(20), nullable=False)  # github / hn / ph
     raw_tags = Column(Text, default="[]")  # JSON string list
+    semantic_tags = Column(Text, default="[]")  # Semantically generated tags
+    category = Column(String(100), nullable=True)
+    embedding = Column(JSON, nullable=True)
     score = Column(Float, default=0.0)
     published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    analyzed_at = Column(DateTime, nullable=True)
 
     digest_items = relationship("DigestItem", back_populates="item")
 
-    def get_raw_tags(self) -> list[str]:
+    def get_raw_tags(self) -> List[str]:
         try:
             return json.loads(self.raw_tags or "[]")
         except (json.JSONDecodeError, TypeError):
             return []
+
+    def get_semantic_tags(self) -> List[str]:
+        try:
+            return json.loads(self.semantic_tags or "[]")
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_semantic_tags(self, tags: List[str]):
+        self.semantic_tags = json.dumps(tags)
+
+    def get_all_tags(self) -> List[str]:
+        raw = self.get_raw_tags()
+        semantic = self.get_semantic_tags()
+        return list(set(raw + semantic))
 
 
 class Digest(Base):

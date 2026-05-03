@@ -6,12 +6,14 @@ import Register from './pages/Register.jsx'
 import Feed from './pages/Feed.jsx'
 import Settings from './pages/Settings.jsx'
 import Digest from './pages/Digest.jsx'
+import Topology from './pages/Topology.jsx'
 
 function NavBar({ onLogout }) {
   return (
     <nav>
       <span className="nav-brand">🚀 SourceRadar</span>
       <NavLink className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')} to="/feed">Feed</NavLink>
+      <NavLink className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')} to="/topology">Topology</NavLink>
       <NavLink className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')} to="/digest">Digest</NavLink>
       <NavLink className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')} to="/settings">Settings</NavLink>
       <button className="btn-logout" onClick={onLogout}>Logout</button>
@@ -32,6 +34,7 @@ function ProtectedApp() {
       <NavBar onLogout={handleLogout} />
       <Routes>
         <Route path="/feed" element={<Feed />} />
+        <Route path="/topology" element={<Topology />} />
         <Route path="/digest" element={<Digest />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/feed" replace />} />

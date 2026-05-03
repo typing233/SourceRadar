@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine
 from app import models
-from app.routers import auth, items, tags, digest
+from app.routers import auth, items, tags, digest, llm, cluster
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     logger.info("Scheduler shut down")
 
 
-app = FastAPI(title="SourceRadar API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="SourceRadar API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,8 +50,10 @@ app.include_router(auth.router)
 app.include_router(items.router)
 app.include_router(tags.router)
 app.include_router(digest.router)
+app.include_router(llm.router)
+app.include_router(cluster.router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "2.0.0"}

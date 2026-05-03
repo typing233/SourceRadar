@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "SourceRadar <noreply@sourceradar.dev>"
     # Comma-separated list of allowed CORS origins. Use "*" for all (dev only).
     CORS_ORIGINS: str = "*"
+    # LLM Configuration (OpenAI-compatible API)
+    LLM_BASE_URL: str = "https://api.openai.com/v1"
+    LLM_API_KEY: str = ""
+    LLM_MODEL_NAME: str = "gpt-3.5-turbo"
+    LLM_EMBEDDING_MODEL: str = "text-embedding-ada-002"
 
     class Config:
         env_file = ".env"
